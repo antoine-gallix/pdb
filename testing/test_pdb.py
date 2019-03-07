@@ -2803,3 +2803,18 @@ def test_edit_error(monkeypatch):
 \*\*\* Could not detect editor. Configure it or set \$EDITOR.
 # c
 """)
+
+
+def test_orig_pdb_set_trace():
+    def fn():
+        set_trace()
+
+    check(fn, """
+--Return-
+[NUM] > .*fn()
+-> set_trace()
+   5 frames hidden .*
+# import pdb
+# assert pdb.orig_set_trace is pdb.pdb.set_trace
+# c
+""")
