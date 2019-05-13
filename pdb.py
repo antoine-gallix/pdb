@@ -434,7 +434,6 @@ class Pdb(pdb.Pdb, ConfigurableClass, object):
         return True
 
     stack_entry_regexp = re.compile(r'(.*?)\(([0-9]+?)\)(.*)', re.DOTALL)
-    stack_line_regexp = re.compile(r"(\n-> )(.*)")
 
     def format_stack_entry(self, frame_lineno, lprefix=': '):
         entry = super(Pdb, self).format_stack_entry(frame_lineno, lprefix)
@@ -446,9 +445,10 @@ class Pdb(pdb.Pdb, ConfigurableClass, object):
                 filename = Color.set(self.config.filename_color, filename)
                 lineno = Color.set(self.config.line_number_color, lineno)
                 entry = '%s(%s)%s' % (filename, lineno, other)
-            entry = self.stack_line_regexp.sub(
-                lambda m: m.group(1) + self.format_source(m.group(2)).rstrip(), entry
-            )
+
+        if self.config.use_pygments:
+            loc, _, source = entry.rpartition(lprefix)
+            entry = loc + _ + self.format_source(source).rstrip()
         return entry
 
     def try_to_decode(self, s):
@@ -995,13 +995,29 @@ except for when using the function decorator.
     def print_stack_entry(
         self, frame_lineno, prompt_prefix=pdb.line_prefix, frame_index=None
     ):
-        frame_index = frame_index if frame_index is not None else self.curindex
         frame, lineno = frame_lineno
         if frame is self.curframe:
-            print("[%d] >" % frame_index, file=self.stdout, end=" ")
+            marker = "> "
         else:
-            print("[%d]  " % frame_index, file=self.stdout, end=" ")
-        print(self.format_stack_entry(frame_lineno, prompt_prefix), file=self.stdout)
+            marker = "  "
+
+        if frame_index is None:
+            frame_index = self.curindex
+            fmt = "{frame_prefix}{marker}"
+            lprefix = prompt_prefix  # "\n ->" by default
+        else:
+            # via/for stack trace
+            fmt = "{marker}{frame_prefix}"
+            lprefix = "\n  "
+
+        # Format stack index (keeping same width across stack).
+        width = len(str(len(self.stack)))
+        frame_prefix = ("[%%%dd] " % width) % frame_index
+
+        marker_frameno = fmt.format(marker=marker, frame_prefix=frame_prefix)
+        print(marker_frameno, file=self.stdout, end="")
+
+        print(self.format_stack_entry(frame_lineno, lprefix), file=self.stdout)
 
     def print_current_stack_entry(self):
         if self.sticky:
